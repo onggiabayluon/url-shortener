@@ -6,6 +6,8 @@ Create short links, track click counts, and manage your URLs from a dashboard.
 
 ![URL Shortener Demo](public/url_shortener_demo.gif)
 
+![URL Shortener Demo](public/url_shortener_demo_2.gif)
+
 ## Stack
 
 - **Laravel 13** — backend framework (routing, auth, database)
