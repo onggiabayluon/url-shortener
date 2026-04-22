@@ -1,19 +1,9 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, RefObject } from 'react';
+import UrlController from '@/actions/App/Http/Controllers/UrlController';
 import { login, register } from '@/routes';
 import { index } from '@/routes/urls';
-
-function makeShortCode(): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-
-    for (let index = 0; index < 5; index += 1) {
-        result += chars[Math.floor(Math.random() * chars.length)];
-    }
-
-    return result;
-}
 
 function useCountUp(target: number, duration = 1800, start = false): number {
     const [value, setValue] = useState(0);
@@ -124,21 +114,52 @@ function HeroShortener() {
             return;
         }
 
+        const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+
         setError('');
         setLoading(true);
         setResult(null);
 
-        await new Promise((resolve) => {
-            setTimeout(resolve, 680);
-        });
+        try {
+            const csrfToken = document
+                .querySelector('meta[name="csrf-token"]')
+                ?.getAttribute('content');
 
-        setResult({
-            short: `${window.location.host}/${makeShortCode()}`,
-            original: url,
-            created: 'just now',
-            clicks: 0,
-        });
-        setLoading(false);
+            const response = await fetch(UrlController.store.url(), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+                },
+                body: JSON.stringify({ original_url: normalizedUrl }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                const validationError = Array.isArray(data?.errors?.original_url)
+                    ? data.errors.original_url[0]
+                    : data?.message;
+
+                setError(validationError ?? 'Something went wrong.');
+
+                return;
+            }
+
+            setResult({
+                short: data.short_url,
+                original: normalizedUrl,
+                created: 'just now',
+                clicks: 0,
+            });
+        } catch {
+            setError('Could not shorten this URL right now. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const copy = (): void => {

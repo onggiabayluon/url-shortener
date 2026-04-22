@@ -32,6 +32,11 @@ class RedirectController extends Controller
             }
         );
 
+        if (! is_array($cached)) {
+            Cache::forget('short_url:'.$code);
+            $cached = null;
+        }
+
         abort_if($cached === null, 404);
 
         if ($cached['expires_at'] !== null && now()->gt($cached['expires_at'])) {

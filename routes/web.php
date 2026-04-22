@@ -9,11 +9,12 @@ Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
 ])->name('home');
 
+Route::get('/urls', [UrlController::class, 'index'])->name('urls.index');
+Route::post('/urls', [UrlController::class, 'store'])->name('urls.store');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
 
-    Route::get('/urls', [UrlController::class, 'index'])->name('urls.index');
-    Route::post('/urls', [UrlController::class, 'store'])->name('urls.store');
     Route::delete('/urls/{shortUrl}', [UrlController::class, 'destroy'])->name('urls.destroy');
 });
 

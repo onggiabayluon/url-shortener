@@ -4,6 +4,8 @@ A simple URL shortener built with Laravel 13, Inertia.js v3, React 19, and Tailw
 
 Create short links, track click counts, and manage your URLs from a dashboard.
 
+![URL Shortener Demo](public/url_shortener_demo.gif)
+
 ## Stack
 
 - **Laravel 13** — backend framework (routing, auth, database)
