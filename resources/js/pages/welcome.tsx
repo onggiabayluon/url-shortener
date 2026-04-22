@@ -1,400 +1,717 @@
-import { Head, Link, usePage } from '@inertiajs/react';
-import { dashboard, login, register } from '@/routes';
+import { Head } from '@inertiajs/react';
+import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent, RefObject } from 'react';
 
-export default function Welcome({
-    canRegister = true,
-}: {
-    canRegister?: boolean;
-}) {
-    const { auth } = usePage().props;
+function makeShortCode(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+
+    for (let index = 0; index < 5; index += 1) {
+        result += chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    return result;
+}
+
+function useCountUp(target: number, duration = 1800, start = false): number {
+    const [value, setValue] = useState(0);
+
+    useEffect(() => {
+        if (!start) {
+            return;
+        }
+
+        let startTime: number | null = null;
+
+        const tick = (timestamp: number) => {
+            if (startTime === null) {
+                startTime = timestamp;
+            }
+
+            const progress = Math.min((timestamp - startTime) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setValue(eased * target);
+
+            if (progress < 1) {
+                requestAnimationFrame(tick);
+            }
+        };
+
+        requestAnimationFrame(tick);
+    }, [start, target, duration]);
+
+    return value;
+}
+
+function useInView<T extends HTMLElement>(ref: RefObject<T | null>): boolean {
+    const [inView, setInView] = useState(false);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setInView(true);
+                }
+            },
+            { threshold: 0.3 },
+        );
+
+        if (ref.current) {
+            observer.observe(ref.current);
+        }
+
+        return () => {
+            observer.disconnect();
+        };
+    }, [ref]);
+
+    return inView;
+}
+
+const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const BAR_DATA = [45, 72, 58, 89, 134, 98, 112];
+const BAR_HEIGHT_CLASSES = [
+    'h-[33.58%]',
+    'h-[53.73%]',
+    'h-[43.28%]',
+    'h-[66.42%]',
+    'h-[100%]',
+    'h-[73.13%]',
+    'h-[83.58%]',
+];
+
+type ShortResult = {
+    short: string;
+    original: string;
+    created: string;
+    clicks: number;
+};
+
+function HeroShortener() {
+    const [url, setUrl] = useState('');
+    const [result, setResult] = useState<ShortResult | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [copied, setCopied] = useState(false);
+
+    const isValidUrl = (value: string): boolean => {
+        try {
+            const normalized = value.startsWith('http')
+                ? value
+                : `https://${value}`;
+            const parsedUrl = new URL(normalized);
+
+            void parsedUrl;
+
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    const shorten = async (): Promise<void> => {
+        if (!url.trim()) {
+            setError('Paste a URL first.');
+
+            return;
+        }
+
+        if (!isValidUrl(url)) {
+            setError("That doesn't look like a valid URL.");
+
+            return;
+        }
+
+        setError('');
+        setLoading(true);
+        setResult(null);
+
+        await new Promise((resolve) => {
+            setTimeout(resolve, 680);
+        });
+
+        setResult({
+            short: `snip.io/${makeShortCode()}`,
+            original: url,
+            created: 'just now',
+            clicks: 0,
+        });
+        setLoading(false);
+    };
+
+    const copy = (): void => {
+        if (!result) {
+            return;
+        }
+
+        navigator.clipboard.writeText(result.short).catch(() => {});
+        setCopied(true);
+
+        setTimeout(() => {
+            setCopied(false);
+        }, 2000);
+    };
+
+    const handleKey = (event: KeyboardEvent<HTMLInputElement>): void => {
+        if (event.key === 'Enter') {
+            void shorten();
+        }
+    };
 
     return (
+        <div className="w-full max-w-[720px]">
+            <div className="flex items-stretch gap-1.5 rounded-[14px] border border-[oklch(0.87_0.008_80)] bg-white p-1.5 shadow-[0_2px_12px_oklch(0_0_0_/_0.07),0_0_0_4px_oklch(0.45_0.18_155_/_0.10)] transition-[border-color,box-shadow] focus-within:border-[oklch(0.45_0.18_155)] focus-within:shadow-[0_4px_24px_oklch(0_0_0_/_0.1),0_0_0_4px_oklch(0.45_0.18_155_/_0.10)]">
+                <input
+                    className="min-w-0 flex-1 border-0 bg-transparent px-[18px] py-4 font-['JetBrains_Mono'] text-[15px] text-[oklch(0.18_0.01_255)] outline-none placeholder:text-[oklch(0.52_0.01_255)]"
+                    type="text"
+                    placeholder="https://your-very-long-url.com/goes/right/here"
+                    value={url}
+                    onChange={(event) => {
+                        setUrl(event.target.value);
+                        setError('');
+                    }}
+                    onKeyDown={handleKey}
+                    autoFocus
+                />
+                <button
+                    className="shrink-0 rounded-[10px] border-0 bg-[oklch(0.18_0.01_255)] px-7 py-[14px] font-['Space_Grotesk'] text-sm font-bold whitespace-nowrap text-[oklch(0.98_0.004_80)] transition-[opacity,transform] hover:scale-[1.02] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => void shorten()}
+                    disabled={loading}
+                    type="button"
+                >
+                    {loading ? '...' : 'Shorten ->'}
+                </button>
+            </div>
+
+            {error && (
+                <div className="mt-2 px-1 text-left font-['JetBrains_Mono'] text-[13px] text-[oklch(0.55_0.18_25)]">
+                    Warning: {error}
+                </div>
+            )}
+
+            {result && (
+                <div className="mt-3 flex items-center justify-between gap-4 overflow-hidden rounded-xl border border-[oklch(0.45_0.18_155)] bg-[oklch(0.95_0.006_80)] px-5 py-4">
+                    <span className="flex-1 overflow-hidden text-left font-['JetBrains_Mono'] text-base font-bold text-ellipsis whitespace-nowrap text-[oklch(0.45_0.18_155)]">
+                        {result.short}
+                    </span>
+                    <button
+                        className={`shrink-0 rounded-lg border border-[oklch(0.45_0.18_155)] px-4 py-2 font-['Space_Grotesk'] text-[13px] font-semibold whitespace-nowrap transition-colors ${
+                            copied
+                                ? 'bg-[oklch(0.45_0.18_155)] text-white'
+                                : 'bg-[oklch(0.45_0.18_155_/_0.10)] text-[oklch(0.45_0.18_155)] hover:bg-[oklch(0.45_0.18_155)] hover:text-[oklch(0.98_0.004_80)]'
+                        }`}
+                        onClick={copy}
+                        type="button"
+                    >
+                        {copied ? 'Copied' : 'Copy'}
+                    </button>
+                </div>
+            )}
+
+            {result && (
+                <div className="mt-2 flex items-center gap-4 px-1">
+                    <span className="flex items-center gap-1.5 font-['JetBrains_Mono'] text-xs text-[oklch(0.52_0.01_255)]">
+                        <span className="text-[oklch(0.45_0.18_155)]">
+                            &rarr;
+                        </span>
+                        {result.original.length > 40
+                            ? `${result.original.slice(0, 40)}...`
+                            : result.original}
+                    </span>
+                    <span className="flex items-center gap-1.5 font-['JetBrains_Mono'] text-xs text-[oklch(0.52_0.01_255)]">
+                        <span className="text-[oklch(0.45_0.18_155)]">*</span>
+                        Created {result.created}
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function StatsSection() {
+    const ref = useRef<HTMLElement | null>(null);
+    const inView = useInView(ref);
+    const links = useCountUp(2847193, 2000, inView);
+    const clicks = useCountUp(48, 1800, inView);
+    const uptime = useCountUp(99.98, 1600, inView);
+
+    return (
+        <section
+            className="mx-auto max-w-[1100px] px-12 py-[100px] max-md:px-5 max-md:py-[60px]"
+            id="stats"
+            ref={ref}
+        >
+            <div className="mb-4 font-['JetBrains_Mono'] text-[11px] font-medium tracking-[2px] text-[oklch(0.45_0.18_155)] uppercase">
+                By the numbers
+            </div>
+            <h2 className="mb-16 max-w-[560px] text-[clamp(32px,4vw,52px)] leading-[1.1] font-bold tracking-[-2px]">
+                Built for scale.
+                <br />
+                Designed for clarity.
+            </h2>
+            <div className="grid grid-cols-3 gap-0.5 overflow-hidden rounded-2xl bg-[oklch(0.87_0.008_80)] max-md:grid-cols-1">
+                <div className="relative overflow-hidden bg-[oklch(0.95_0.006_80)] px-10 py-12 shadow-[inset_0_1px_0_oklch(1_0_0_/_0.6)]">
+                    <div className="mb-3 font-['JetBrains_Mono'] text-[56px] leading-none font-bold tracking-[-3px] text-[oklch(0.18_0.01_255)]">
+                        {Math.round(links).toLocaleString()}
+                        <span className="text-[28px] text-[oklch(0.45_0.18_155)]">
+                            +
+                        </span>
+                    </div>
+                    <div className="text-[15px] text-[oklch(0.52_0.01_255)]">
+                        Links shortened
+                    </div>
+                    <div className="mt-2 font-['JetBrains_Mono'] text-[13px] text-[oklch(0.45_0.18_155_/_0.7)]">
+                        &rarr; and counting
+                    </div>
+                </div>
+                <div className="relative overflow-hidden bg-[oklch(0.95_0.006_80)] px-10 py-12 shadow-[inset_0_1px_0_oklch(1_0_0_/_0.6)]">
+                    <div className="mb-3 font-['JetBrains_Mono'] text-[56px] leading-none font-bold tracking-[-3px] text-[oklch(0.18_0.01_255)]">
+                        {clicks.toFixed(1)}
+                        <span className="text-[28px] text-[oklch(0.45_0.18_155)]">
+                            M
+                        </span>
+                    </div>
+                    <div className="text-[15px] text-[oklch(0.52_0.01_255)]">
+                        Clicks tracked daily
+                    </div>
+                    <div className="mt-2 font-['JetBrains_Mono'] text-[13px] text-[oklch(0.45_0.18_155_/_0.7)]">
+                        &rarr; real-time data
+                    </div>
+                </div>
+                <div className="relative overflow-hidden bg-[oklch(0.95_0.006_80)] px-10 py-12 shadow-[inset_0_1px_0_oklch(1_0_0_/_0.6)]">
+                    <div className="mb-3 font-['JetBrains_Mono'] text-[56px] leading-none font-bold tracking-[-3px] text-[oklch(0.18_0.01_255)]">
+                        {uptime.toFixed(2)}
+                        <span className="text-[28px] text-[oklch(0.45_0.18_155)]">
+                            %
+                        </span>
+                    </div>
+                    <div className="text-[15px] text-[oklch(0.52_0.01_255)]">
+                        Uptime SLA
+                    </div>
+                    <div className="mt-2 font-['JetBrains_Mono'] text-[13px] text-[oklch(0.45_0.18_155_/_0.7)]">
+                        &rarr; global CDN
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function ClickChart() {
+    const [hovered, setHovered] = useState<number | null>(null);
+
+    return (
+        <div className="rounded-xl border border-[oklch(0.87_0.008_80)] bg-[oklch(0.98_0.004_80)] p-6 font-['JetBrains_Mono']">
+            <div className="mb-5 flex items-center justify-between">
+                <span className="text-[13px] text-[oklch(0.52_0.01_255)]">
+                    clicks / day
+                </span>
+                <span className="text-2xl font-bold text-[oklch(0.45_0.18_155)]">
+                    {hovered !== null
+                        ? BAR_DATA[hovered]
+                        : BAR_DATA[BAR_DATA.length - 1]}
+                </span>
+            </div>
+            <div className="flex h-20 items-end gap-[5px]">
+                {BAR_DATA.map((value, index) => (
+                    <div
+                        key={value}
+                        className={`${BAR_HEIGHT_CLASSES[index]} flex-1 cursor-default rounded-t-[3px] border border-b-0 border-[oklch(0.87_0.008_80)] transition-opacity hover:opacity-80 ${
+                            hovered === index
+                                ? 'bg-[oklch(0.45_0.18_155)]'
+                                : index === BAR_DATA.length - 1
+                                  ? 'bg-[oklch(0.45_0.18_155_/_0.10)]'
+                                  : 'bg-[oklch(0.92_0.007_80)]'
+                        }`}
+                        onMouseEnter={() => {
+                            setHovered(index);
+                        }}
+                        onMouseLeave={() => {
+                            setHovered(null);
+                        }}
+                    />
+                ))}
+            </div>
+            <div className="mt-2 flex gap-[5px]">
+                {DAYS.map((day, index) => (
+                    <span
+                        className="flex-1 text-center text-[10px] text-[oklch(0.52_0.01_255)]"
+                        key={`${day}-${index}`}
+                    >
+                        {day}
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+const SAMPLE_LINKS = [
+    {
+        short: 'snip.io/q7f2a',
+        dest: 'notion.so/team/roadmap',
+        clicks: '3,841',
+        trend: '+24%',
+        up: true,
+    },
+    {
+        short: 'snip.io/mk9px',
+        dest: 'github.com/org/repo/pull/1204',
+        clicks: '1,293',
+        trend: '+8%',
+        up: true,
+    },
+    {
+        short: 'snip.io/b3tt0',
+        dest: 'figma.com/file/xKJ…',
+        clicks: '988',
+        trend: '-3%',
+        up: false,
+    },
+    {
+        short: 'snip.io/zn4wr',
+        dest: 'docs.acme.com/getting-started',
+        clicks: '724',
+        trend: '+41%',
+        up: true,
+    },
+];
+
+function FeaturesSection() {
+    return (
+        <section
+            className="mx-auto max-w-[1100px] px-12 pb-[100px] max-md:px-5"
+            id="features"
+        >
+            <div className="mb-4 font-['JetBrains_Mono'] text-[11px] font-medium tracking-[2px] text-[oklch(0.45_0.18_155)] uppercase">
+                What you get
+            </div>
+            <h2 className="mb-10 max-w-[560px] text-[clamp(32px,4vw,52px)] leading-[1.1] font-bold tracking-[-2px]">
+                Every click tells a story.
+            </h2>
+            <div className="grid grid-cols-2 gap-0.5 overflow-hidden rounded-2xl bg-[oklch(0.87_0.008_80)] max-md:grid-cols-1">
+                <div className="col-span-2 grid grid-cols-2 items-center gap-12 bg-[oklch(0.95_0.006_80)] px-11 py-12 max-md:col-span-1 max-md:grid-cols-1">
+                    <div>
+                        <div className="mb-6 flex size-11 items-center justify-center rounded-[10px] border border-[oklch(0.87_0.008_80)] bg-[oklch(0.92_0.007_80)] text-xl text-[oklch(0.45_0.18_155)]">
+                            ▦
+                        </div>
+                        <div className="mb-3 text-[22px] font-semibold tracking-[-0.5px]">
+                            Daily click tracking
+                        </div>
+                        <p className="text-[15px] leading-[1.65] text-[oklch(0.52_0.01_255)]">
+                            Watch your links perform in real time. Day-by-day
+                            breakdowns, peak traffic windows, and trend analysis
+                            - all in one view.
+                        </p>
+                        <div className="mt-7">
+                            <ClickChart />
+                        </div>
+                    </div>
+                    <div>
+                        <div className="mb-6 flex size-11 items-center justify-center rounded-[10px] border border-[oklch(0.87_0.008_80)] bg-[oklch(0.92_0.007_80)] text-xl text-[oklch(0.45_0.18_155)]">
+                            ⊞
+                        </div>
+                        <div className="mb-3 text-[22px] font-semibold tracking-[-0.5px]">
+                            All your links, at a glance
+                        </div>
+                        <p className="mb-6 text-[15px] leading-[1.65] text-[oklch(0.52_0.01_255)]">
+                            Manage every shortened link from a unified
+                            dashboard. Sort, filter, and act instantly.
+                        </p>
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-[13px]">
+                                <thead>
+                                    <tr>
+                                        <th className="border-b border-[oklch(0.87_0.008_80)] pb-3 text-left font-medium text-[oklch(0.52_0.01_255)]">
+                                            Short link
+                                        </th>
+                                        <th className="border-b border-[oklch(0.87_0.008_80)] pb-3 text-left font-medium text-[oklch(0.52_0.01_255)]">
+                                            Destination
+                                        </th>
+                                        <th className="border-b border-[oklch(0.87_0.008_80)] pb-3 text-left font-medium text-[oklch(0.52_0.01_255)]">
+                                            Clicks
+                                        </th>
+                                        <th className="border-b border-[oklch(0.87_0.008_80)] pb-3 text-left font-medium text-[oklch(0.52_0.01_255)]">
+                                            7d
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {SAMPLE_LINKS.map((link) => (
+                                        <tr key={link.short}>
+                                            <td className="border-b border-[oklch(0.22_0.012_255_/_0.5)] py-3.5 font-['JetBrains_Mono'] text-[oklch(0.45_0.18_155)] last:border-b-0">
+                                                {link.short}
+                                            </td>
+                                            <td className="max-w-40 overflow-hidden border-b border-[oklch(0.22_0.012_255_/_0.5)] py-3.5 font-['JetBrains_Mono'] text-xs text-ellipsis whitespace-nowrap text-[oklch(0.52_0.01_255)] last:border-b-0">
+                                                {link.dest}
+                                            </td>
+                                            <td className="border-b border-[oklch(0.22_0.012_255_/_0.5)] py-3.5 font-['JetBrains_Mono'] font-bold last:border-b-0">
+                                                {link.clicks}
+                                            </td>
+                                            <td className="border-b border-[oklch(0.22_0.012_255_/_0.5)] py-3.5 last:border-b-0">
+                                                <span
+                                                    className={`rounded px-2 py-[3px] font-['JetBrains_Mono'] text-[11px] font-bold ${
+                                                        link.up
+                                                            ? 'bg-[oklch(0.85_0.22_140_/_0.12)] text-[oklch(0.45_0.18_155)]'
+                                                            : 'bg-[oklch(0.7_0.22_25_/_0.12)] text-[oklch(0.55_0.18_25)]'
+                                                    }`}
+                                                >
+                                                    {link.trend}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-[oklch(0.95_0.006_80)] px-11 py-12 transition-colors hover:bg-[oklch(0.92_0.007_80)]">
+                    <div className="mb-6 flex size-11 items-center justify-center rounded-[10px] border border-[oklch(0.87_0.008_80)] bg-[oklch(0.92_0.007_80)] text-xl text-[oklch(0.45_0.18_155)]">
+                        ◉
+                    </div>
+                    <div className="mb-3 text-[22px] font-semibold tracking-[-0.5px]">
+                        Custom slugs
+                    </div>
+                    <p className="text-[15px] leading-[1.65] text-[oklch(0.52_0.01_255)]">
+                        Make links memorable. Replace random codes with branded
+                        slugs -
+                        <span className="font-['JetBrains_Mono'] text-[13px] text-[oklch(0.45_0.18_155)]">
+                            {' '}
+                            snip.io/launch
+                        </span>{' '}
+                        instead of gibberish.
+                    </p>
+                </div>
+
+                <div className="bg-[oklch(0.95_0.006_80)] px-11 py-12 transition-colors hover:bg-[oklch(0.92_0.007_80)]">
+                    <div className="mb-6 flex size-11 items-center justify-center rounded-[10px] border border-[oklch(0.87_0.008_80)] bg-[oklch(0.92_0.007_80)] text-xl text-[oklch(0.45_0.18_155)]">
+                        ⧖
+                    </div>
+                    <div className="mb-3 text-[22px] font-semibold tracking-[-0.5px]">
+                        Link expiration
+                    </div>
+                    <p className="text-[15px] leading-[1.65] text-[oklch(0.52_0.01_255)]">
+                        Set links to expire after a date or a number of clicks.
+                        Perfect for time-sensitive campaigns and temporary
+                        access.
+                    </p>
+                </div>
+
+                <div className="bg-[oklch(0.95_0.006_80)] px-11 py-12 transition-colors hover:bg-[oklch(0.92_0.007_80)]">
+                    <div className="mb-6 flex size-11 items-center justify-center rounded-[10px] border border-[oklch(0.87_0.008_80)] bg-[oklch(0.92_0.007_80)] text-xl text-[oklch(0.45_0.18_155)]">
+                        ◈
+                    </div>
+                    <div className="mb-3 text-[22px] font-semibold tracking-[-0.5px]">
+                        Geo and device breakdown
+                    </div>
+                    <p className="text-[15px] leading-[1.65] text-[oklch(0.52_0.01_255)]">
+                        Know exactly where your audience comes from. Country,
+                        city, device type, browser - all logged, all searchable.
+                    </p>
+                </div>
+
+                <div className="bg-[oklch(0.95_0.006_80)] px-11 py-12 transition-colors hover:bg-[oklch(0.92_0.007_80)]">
+                    <div className="mb-6 flex size-11 items-center justify-center rounded-[10px] border border-[oklch(0.87_0.008_80)] bg-[oklch(0.92_0.007_80)] text-xl text-[oklch(0.45_0.18_155)]">
+                        ⌘
+                    </div>
+                    <div className="mb-3 text-[22px] font-semibold tracking-[-0.5px]">
+                        API-first design
+                    </div>
+                    <p className="text-[15px] leading-[1.65] text-[oklch(0.52_0.01_255)]">
+                        Integrate snip into your stack in minutes. REST API with
+                        full docs, webhooks, and SDKs for Node, Python, and Go.
+                    </p>
+                </div>
+            </div>
+        </section>
+    );
+}
+
+export default function Welcome() {
+    return (
         <>
-            <Head title="Welcome">
-                <link rel="preconnect" href="https://fonts.bunny.net" />
+            <Head title="snip - URL Shortener">
+                <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link
-                    href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600"
                     rel="stylesheet"
+                    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
                 />
             </Head>
-            <div className="flex min-h-screen flex-col items-center bg-[#FDFDFC] p-6 text-[#1b1b18] lg:justify-center lg:p-8 dark:bg-[#0a0a0a]">
-                <header className="mb-6 w-full max-w-[335px] text-sm not-has-[nav]:hidden lg:max-w-4xl">
-                    <nav className="flex items-center justify-end gap-4">
-                        {auth.user ? (
-                            <Link
-                                href={dashboard()}
-                                className="inline-block rounded-sm border border-[#19140035] px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#1915014a] dark:border-[#3E3E3A] dark:text-[#EDEDEC] dark:hover:border-[#62605b]"
+
+            <div className="overflow-x-hidden bg-[oklch(0.98_0.004_80)] font-['Space_Grotesk'] text-[oklch(0.18_0.01_255)] antialiased">
+                <nav className="fixed inset-x-0 top-0 z-[100] flex items-center justify-between bg-gradient-to-b from-[oklch(0.98_0.004_80)] to-transparent px-12 py-5 max-md:px-5 max-md:py-4">
+                    <div className="flex items-center gap-2 font-['JetBrains_Mono'] text-[22px] font-bold tracking-[-0.5px]">
+                        snip
+                        <span className="text-[oklch(0.45_0.18_155)]">.</span>
+                    </div>
+                    <ul className="flex items-center gap-8 text-sm font-medium text-[oklch(0.52_0.01_255)] max-md:hidden">
+                        <li>
+                            <a
+                                className="transition-colors hover:text-[oklch(0.18_0.01_255)]"
+                                href="#features"
                             >
-                                Dashboard
-                            </Link>
-                        ) : (
-                            <>
-                                <Link
-                                    href={login()}
-                                    className="inline-block rounded-sm border border-transparent px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#19140035] dark:text-[#EDEDEC] dark:hover:border-[#3E3E3A]"
+                                Features
+                            </a>
+                        </li>
+                        <li>
+                            <a
+                                className="transition-colors hover:text-[oklch(0.18_0.01_255)]"
+                                href="#stats"
+                            >
+                                Analytics
+                            </a>
+                        </li>
+                        {/* <li>
+                            <a
+                                className="transition-colors hover:text-[oklch(0.18_0.01_255)]"
+                                href="#"
+                            >
+                                Pricing
+                            </a>
+                        </li>
+                        <li>
+                            <a
+                                className="transition-colors hover:text-[oklch(0.18_0.01_255)]"
+                                href="#"
+                            >
+                                Docs
+                            </a>
+                        </li> */}
+                    </ul>
+                    <a
+                        className="rounded-lg bg-[oklch(0.18_0.01_255)] px-[22px] py-2.5 text-sm font-semibold text-[oklch(0.98_0.004_80)] transition-[opacity,transform] hover:-translate-y-px hover:opacity-90"
+                        href="#"
+                    >
+                        Get started free
+                    </a>
+                </nav>
+
+                <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 pt-[120px] pb-20 text-center">
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                        <div className="absolute inset-0 bg-[linear-gradient(oklch(0.87_0.008_80)_1px,transparent_1px),linear-gradient(90deg,oklch(0.87_0.008_80)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,black_30%,transparent_80%)] bg-[size:60px_60px] opacity-70" />
+                        <div className="absolute top-[20%] left-1/2 h-[400px] w-[700px] -translate-x-1/2 bg-[radial-gradient(ellipse,oklch(0.45_0.18_155_/_0.15)_0%,transparent_70%)]" />
+                    </div>
+
+                    <div className="mb-9 inline-flex items-center gap-2 rounded-full border border-[oklch(0.87_0.008_80)] bg-[oklch(0.95_0.006_80)] px-3.5 py-1.5 font-['JetBrains_Mono'] text-xs text-[oklch(0.45_0.18_155)]">
+                        <span className="size-1.5 rounded-full bg-[oklch(0.45_0.18_155)] shadow-[0_0_8px_oklch(0.45_0.18_155)]" />
+                        Now with real-time analytics
+                    </div>
+
+                    <h1 className="mb-6 text-[clamp(52px,8vw,96px)] leading-[1] font-bold tracking-[-3px]">
+                        Long URLs,
+                        <br />
+                        <span className="text-[oklch(0.45_0.18_155)]">
+                            snipped
+                        </span>{' '}
+                        short.
+                    </h1>
+
+                    <p className="mb-14 max-w-[480px] text-lg leading-[1.6] text-[oklch(0.52_0.01_255)]">
+                        Shorten, share, and track any link - with beautiful
+                        analytics that show you exactly where your clicks come
+                        from.
+                    </p>
+
+                    <HeroShortener />
+                </section>
+
+                {/* <div className="overflow-hidden bg-[oklch(0.18_0.01_255)] py-3 font-['JetBrains_Mono'] text-[13px] font-bold whitespace-nowrap text-[oklch(0.98_0.004_80)]">
+                    <div className="inline-flex animate-[ticker_18s_linear_infinite] gap-0">
+                        {[...Array(2)].map((_, rowIndex) =>
+                            [
+                                'snip.io/q7f2a -> 3,841 clicks',
+                                'snip.io/launch -> 12K clicks',
+                                '99.98% uptime',
+                                'Real-time analytics',
+                                'Custom slugs',
+                                'API-first',
+                                'Geo tracking',
+                                'Link expiration',
+                                '2.8M links shortened',
+                            ].map((text, index) => (
+                                <span
+                                    className="px-10"
+                                    key={`${rowIndex}-${index}`}
                                 >
-                                    Log in
-                                </Link>
-                                {canRegister && (
-                                    <Link
-                                        href={register()}
-                                        className="inline-block rounded-sm border border-[#19140035] px-5 py-1.5 text-sm leading-normal text-[#1b1b18] hover:border-[#1915014a] dark:border-[#3E3E3A] dark:text-[#EDEDEC] dark:hover:border-[#62605b]"
-                                    >
-                                        Register
-                                    </Link>
-                                )}
-                            </>
+                                    {text} <span className="opacity-40">.</span>
+                                </span>
+                            )),
                         )}
-                    </nav>
-                </header>
-                <div className="flex w-full items-center justify-center opacity-100 transition-opacity duration-750 lg:grow starting:opacity-0">
-                    <main className="flex w-full max-w-[335px] flex-col-reverse lg:max-w-4xl lg:flex-row">
-                        <div className="flex-1 rounded-br-lg rounded-bl-lg bg-white p-6 pb-12 text-[13px] leading-[20px] shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] lg:rounded-tl-lg lg:rounded-br-none lg:p-20 dark:bg-[#161615] dark:text-[#EDEDEC] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d]">
-                            <h1 className="mb-1 font-medium">
-                                Let's get started
-                            </h1>
-                            <p className="mb-2 text-[#706f6c] dark:text-[#A1A09A]">
-                                Laravel has an incredibly rich ecosystem.
-                                <br />
-                                We suggest starting with the following.
-                            </p>
-                            <ul className="mb-4 flex flex-col lg:mb-6">
-                                <li className="relative flex items-center gap-4 py-2 before:absolute before:top-1/2 before:bottom-0 before:left-[0.4rem] before:border-l before:border-[#e3e3e0] dark:before:border-[#3E3E3A]">
-                                    <span className="relative bg-white py-1 dark:bg-[#161615]">
-                                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#e3e3e0] bg-[#FDFDFC] shadow-[0px_0px_1px_0px_rgba(0,0,0,0.03),0px_1px_2px_0px_rgba(0,0,0,0.06)] dark:border-[#3E3E3A] dark:bg-[#161615]">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-[#dbdbd7] dark:bg-[#3E3E3A]" />
-                                        </span>
-                                    </span>
-                                    <span>
-                                        Read the
-                                        <a
-                                            href="https://laravel.com/docs"
-                                            target="_blank"
-                                            className="ml-1 inline-flex items-center space-x-1 font-medium text-[#f53003] underline underline-offset-4 dark:text-[#FF4433]"
-                                        >
-                                            <span>Documentation</span>
-                                            <svg
-                                                width={10}
-                                                height={11}
-                                                viewBox="0 0 10 11"
-                                                fill="none"
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                className="h-2.5 w-2.5"
-                                            >
-                                                <path
-                                                    d="M7.70833 6.95834V2.79167H3.54167M2.5 8L7.5 3.00001"
-                                                    stroke="currentColor"
-                                                    strokeLinecap="square"
-                                                />
-                                            </svg>
-                                        </a>
-                                    </span>
-                                </li>
-                                <li className="relative flex items-center gap-4 py-2 before:absolute before:top-0 before:bottom-1/2 before:left-[0.4rem] before:border-l before:border-[#e3e3e0] dark:before:border-[#3E3E3A]">
-                                    <span className="relative bg-white py-1 dark:bg-[#161615]">
-                                        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[#e3e3e0] bg-[#FDFDFC] shadow-[0px_0px_1px_0px_rgba(0,0,0,0.03),0px_1px_2px_0px_rgba(0,0,0,0.06)] dark:border-[#3E3E3A] dark:bg-[#161615]">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-[#dbdbd7] dark:bg-[#3E3E3A]" />
-                                        </span>
-                                    </span>
-                                    <span>
-                                        Watch video tutorials at
-                                        <a
-                                            href="https://laracasts.com"
-                                            target="_blank"
-                                            className="ml-1 inline-flex items-center space-x-1 font-medium text-[#f53003] underline underline-offset-4 dark:text-[#FF4433]"
-                                        >
-                                            <span>Laracasts</span>
-                                            <svg
-                                                width={10}
-                                                height={11}
-                                                viewBox="0 0 10 11"
-                                                fill="none"
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                className="h-2.5 w-2.5"
-                                            >
-                                                <path
-                                                    d="M7.70833 6.95834V2.79167H3.54167M2.5 8L7.5 3.00001"
-                                                    stroke="currentColor"
-                                                    strokeLinecap="square"
-                                                />
-                                            </svg>
-                                        </a>
-                                    </span>
-                                </li>
-                            </ul>
-                            <ul className="flex gap-3 text-sm leading-normal">
-                                <li>
-                                    <a
-                                        href="https://cloud.laravel.com"
-                                        target="_blank"
-                                        className="inline-block rounded-sm border border-black bg-[#1b1b18] px-5 py-1.5 text-sm leading-normal text-white hover:border-black hover:bg-black dark:border-[#eeeeec] dark:bg-[#eeeeec] dark:text-[#1C1C1A] dark:hover:border-white dark:hover:bg-white"
-                                    >
-                                        Deploy now
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        <div className="relative -mb-px aspect-[335/364] w-full shrink-0 overflow-hidden rounded-t-lg bg-[#fff2f2] lg:mb-0 lg:-ml-px lg:aspect-auto lg:w-[438px] lg:rounded-t-none lg:rounded-r-lg dark:bg-[#1D0002]">
-                            {/* Laravel Logo */}
-                            <svg
-                                className="w-full max-w-none translate-y-0 text-[#F53003] opacity-100 transition-all duration-750 dark:text-[#F61500] starting:opacity-0 motion-safe:starting:translate-y-6"
-                                viewBox="0 0 438 104"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
+                    </div>
+                </div> */}
+
+                <StatsSection />
+                <FeaturesSection />
+
+                <div className="mx-auto max-w-[1100px] px-12 pb-20 max-md:px-5 max-md:pb-[60px]">
+                    <div className="relative overflow-hidden rounded-[20px] border border-[oklch(0.87_0.008_80)] bg-[oklch(0.95_0.006_80)] px-16 py-20 text-center max-md:px-6 max-md:py-[60px]">
+                        <div className="pointer-events-none absolute top-1/2 left-1/2 h-[200px] w-[500px] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(ellipse,oklch(0.45_0.18_155_/_0.15)_0%,transparent_70%)]" />
+                        <h2 className="relative mb-4 text-[clamp(36px,4vw,60px)] font-bold tracking-[-2px]">
+                            Start shortening.
+                            <br />
+                            Start knowing.
+                        </h2>
+                        <p className="relative mb-10 text-base text-[oklch(0.52_0.01_255)]">
+                            Free for the first 1,000 links. No credit card
+                            required.
+                        </p>
+                        <div className="relative flex justify-center gap-3">
+                            <a
+                                className="rounded-[10px] bg-[oklch(0.18_0.01_255)] px-9 py-4 text-[15px] font-bold text-[oklch(0.98_0.004_80)] transition-[opacity,transform] hover:-translate-y-px hover:opacity-90"
+                                href="#"
                             >
-                                <path
-                                    d="M17.2036 -3H0V102.197H49.5189V86.7187H17.2036V-3Z"
-                                    fill="currentColor"
-                                />
-                                <path
-                                    d="M110.256 41.6337C108.061 38.1275 104.945 35.3731 100.905 33.3681C96.8667 31.3647 92.8016 30.3618 88.7131 30.3618C83.4247 30.3618 78.5885 31.3389 74.201 33.2923C69.8111 35.2456 66.0474 37.928 62.9059 41.3333C59.7643 44.7401 57.3198 48.6726 55.5754 53.1293C53.8287 57.589 52.9572 62.274 52.9572 67.1813C52.9572 72.1925 53.8287 76.8995 55.5754 81.3069C57.3191 85.7173 59.7636 89.6241 62.9059 93.0293C66.0474 96.4361 69.8119 99.1155 74.201 101.069C78.5885 103.022 83.4247 103.999 88.7131 103.999C92.8016 103.999 96.8667 102.997 100.905 100.994C104.945 98.9911 108.061 96.2359 110.256 92.7282V102.195H126.563V32.1642H110.256V41.6337ZM108.76 75.7472C107.762 78.4531 106.366 80.8078 104.572 82.8112C102.776 84.8161 100.606 86.4183 98.0637 87.6206C95.5202 88.823 92.7004 89.4238 89.6103 89.4238C86.5178 89.4238 83.7252 88.823 81.2324 87.6206C78.7388 86.4183 76.5949 84.8161 74.7998 82.8112C73.004 80.8078 71.6319 78.4531 70.6856 75.7472C69.7356 73.0421 69.2644 70.1868 69.2644 67.1821C69.2644 64.1758 69.7356 61.3205 70.6856 58.6154C71.6319 55.9102 73.004 53.5571 74.7998 51.5522C76.5949 49.5495 78.738 47.9451 81.2324 46.7427C83.7252 45.5404 86.5178 44.9396 89.6103 44.9396C92.7012 44.9396 95.5202 45.5404 98.0637 46.7427C100.606 47.9451 102.776 49.5487 104.572 51.5522C106.367 53.5571 107.762 55.9102 108.76 58.6154C109.756 61.3205 110.256 64.1758 110.256 67.1821C110.256 70.1868 109.756 73.0421 108.76 75.7472Z"
-                                    fill="currentColor"
-                                />
-                                <path
-                                    d="M242.805 41.6337C240.611 38.1275 237.494 35.3731 233.455 33.3681C229.416 31.3647 225.351 30.3618 221.262 30.3618C215.974 30.3618 211.138 31.3389 206.75 33.2923C202.36 35.2456 198.597 37.928 195.455 41.3333C192.314 44.7401 189.869 48.6726 188.125 53.1293C186.378 57.589 185.507 62.274 185.507 67.1813C185.507 72.1925 186.378 76.8995 188.125 81.3069C189.868 85.7173 192.313 89.6241 195.455 93.0293C198.597 96.4361 202.361 99.1155 206.75 101.069C211.138 103.022 215.974 103.999 221.262 103.999C225.351 103.999 229.416 102.997 233.455 100.994C237.494 98.9911 240.611 96.2359 242.805 92.7282V102.195H259.112V32.1642H242.805V41.6337ZM241.31 75.7472C240.312 78.4531 238.916 80.8078 237.122 82.8112C235.326 84.8161 233.156 86.4183 230.614 87.6206C228.07 88.823 225.251 89.4238 222.16 89.4238C219.068 89.4238 216.275 88.823 213.782 87.6206C211.289 86.4183 209.145 84.8161 207.35 82.8112C205.554 80.8078 204.182 78.4531 203.236 75.7472C202.286 73.0421 201.814 70.1868 201.814 67.1821C201.814 64.1758 202.286 61.3205 203.236 58.6154C204.182 55.9102 205.554 53.5571 207.35 51.5522C209.145 49.5495 211.288 47.9451 213.782 46.7427C216.275 45.5404 219.068 44.9396 222.16 44.9396C225.251 44.9396 228.07 45.5404 230.614 46.7427C233.156 47.9451 235.326 49.5487 237.122 51.5522C238.917 53.5571 240.312 55.9102 241.31 58.6154C242.306 61.3205 242.806 64.1758 242.806 67.1821C242.805 70.1868 242.305 73.0421 241.31 75.7472Z"
-                                    fill="currentColor"
-                                />
-                                <path
-                                    d="M438 -3H421.694V102.197H438V-3Z"
-                                    fill="currentColor"
-                                />
-                                <path
-                                    d="M139.43 102.197H155.735V48.2834H183.712V32.1665H139.43V102.197Z"
-                                    fill="currentColor"
-                                />
-                                <path
-                                    d="M324.49 32.1665L303.995 85.794L283.498 32.1665H266.983L293.748 102.197H314.242L341.006 32.1665H324.49Z"
-                                    fill="currentColor"
-                                />
-                                <path
-                                    d="M376.571 30.3656C356.603 30.3656 340.797 46.8497 340.797 67.1828C340.797 89.6597 356.094 104 378.661 104C391.29 104 399.354 99.1488 409.206 88.5848L398.189 80.0226C398.183 80.031 389.874 90.9895 377.468 90.9895C363.048 90.9895 356.977 79.3111 356.977 73.269H411.075C413.917 50.1328 398.775 30.3656 376.571 30.3656ZM357.02 61.0967C357.145 59.7487 359.023 43.3761 376.442 43.3761C393.861 43.3761 395.978 59.7464 396.099 61.0967H357.02Z"
-                                    fill="currentColor"
-                                />
-                            </svg>
-
-                            {/* 13 */}
-                            <svg
-                                className="relative -mt-[6.6rem] -ml-8 w-[438px] max-w-none [--stroke-color:#1B1B18] lg:ml-0 dark:[--stroke-color:#FF750F]"
-                                viewBox="0 0 440 392"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
+                                Create free account
+                            </a>
+                            <a
+                                className="rounded-[10px] border border-[oklch(0.87_0.008_80)] px-9 py-4 text-[15px] font-semibold transition-[border-color,transform] hover:-translate-y-px hover:border-[oklch(0.52_0.01_255)]"
+                                href="#"
                             >
-                                <g className="text-[#1B1B18] opacity-100 mix-blend-darken transition-all delay-300 duration-750 dark:text-black dark:mix-blend-normal starting:opacity-0">
-                                    <mask
-                                        id="path-1-mask"
-                                        maskUnits="userSpaceOnUse"
-                                        x="-0.328613"
-                                        y="103"
-                                        width="338"
-                                        height="299"
-                                        fill="black"
-                                    >
-                                        <rect
-                                            fill="white"
-                                            x="-0.328613"
-                                            y="103"
-                                            width="338"
-                                            height="299"
-                                        />
-                                        <path d="M234.936 400.8C204.136 400.8 178.936 392.4 159.336 375.6C140.136 358.8 130.536 337 130.536 310.2H200.736C200.736 318.2 203.736 324.8 209.736 330C215.736 335.2 223.736 337.8 233.736 337.8C243.336 337.8 251.136 335 257.136 329.4C263.536 323.8 266.736 316.6 266.736 307.8C266.736 299.8 263.936 293.2 258.336 288C252.736 282.8 245.536 280.2 236.736 280.2H199.536V218.4H236.736C243.536 218.4 249.336 216 254.136 211.2C258.936 206.4 261.336 200.4 261.336 193.2C261.336 184.8 258.736 178.2 253.536 173.4C248.336 168.6 241.736 166.2 233.736 166.2C226.536 166.2 220.336 168.4 215.136 172.8C210.336 177.2 207.936 182.8 207.936 189.6H141.336C141.336 164.8 150.136 144.6 167.736 129C185.336 113 207.936 105 235.536 105C263.136 105 285.536 112.2 302.736 126.6C320.336 141 329.136 160 329.136 183.6C329.136 200.8 324.536 214.8 315.336 225.6C306.136 236 294.336 243.2 279.936 247.2C297.136 252 310.736 260.2 320.736 271.8C331.136 283.4 336.336 298 336.336 315.6C336.336 340.4 326.936 360.8 308.136 376.8C289.336 392.8 264.936 400.8 234.936 400.8Z" />
-                                        <path d="M26.8714 167.6H1.67139V105.2H94.6714V400.2H26.8714V167.6Z" />
-                                    </mask>
-                                    <path
-                                        d="M234.936 400.8C204.136 400.8 178.936 392.4 159.336 375.6C140.136 358.8 130.536 337 130.536 310.2H200.736C200.736 318.2 203.736 324.8 209.736 330C215.736 335.2 223.736 337.8 233.736 337.8C243.336 337.8 251.136 335 257.136 329.4C263.536 323.8 266.736 316.6 266.736 307.8C266.736 299.8 263.936 293.2 258.336 288C252.736 282.8 245.536 280.2 236.736 280.2H199.536V218.4H236.736C243.536 218.4 249.336 216 254.136 211.2C258.936 206.4 261.336 200.4 261.336 193.2C261.336 184.8 258.736 178.2 253.536 173.4C248.336 168.6 241.736 166.2 233.736 166.2C226.536 166.2 220.336 168.4 215.136 172.8C210.336 177.2 207.936 182.8 207.936 189.6H141.336C141.336 164.8 150.136 144.6 167.736 129C185.336 113 207.936 105 235.536 105C263.136 105 285.536 112.2 302.736 126.6C320.336 141 329.136 160 329.136 183.6C329.136 200.8 324.536 214.8 315.336 225.6C306.136 236 294.336 243.2 279.936 247.2C297.136 252 310.736 260.2 320.736 271.8C331.136 283.4 336.336 298 336.336 315.6C336.336 340.4 326.936 360.8 308.136 376.8C289.336 392.8 264.936 400.8 234.936 400.8Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M26.8714 167.6H1.67139V105.2H94.6714V400.2H26.8714V167.6Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M234.936 400.8C204.136 400.8 178.936 392.4 159.336 375.6C140.136 358.8 130.536 337 130.536 310.2H200.736C200.736 318.2 203.736 324.8 209.736 330C215.736 335.2 223.736 337.8 233.736 337.8C243.336 337.8 251.136 335 257.136 329.4C263.536 323.8 266.736 316.6 266.736 307.8C266.736 299.8 263.936 293.2 258.336 288C252.736 282.8 245.536 280.2 236.736 280.2H199.536V218.4H236.736C243.536 218.4 249.336 216 254.136 211.2C258.936 206.4 261.336 200.4 261.336 193.2C261.336 184.8 258.736 178.2 253.536 173.4C248.336 168.6 241.736 166.2 233.736 166.2C226.536 166.2 220.336 168.4 215.136 172.8C210.336 177.2 207.936 182.8 207.936 189.6H141.336C141.336 164.8 150.136 144.6 167.736 129C185.336 113 207.936 105 235.536 105C263.136 105 285.536 112.2 302.736 126.6C320.336 141 329.136 160 329.136 183.6C329.136 200.8 324.536 214.8 315.336 225.6C306.136 236 294.336 243.2 279.936 247.2C297.136 252 310.736 260.2 320.736 271.8C331.136 283.4 336.336 298 336.336 315.6C336.336 340.4 326.936 360.8 308.136 376.8C289.336 392.8 264.936 400.8 234.936 400.8Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-1-mask)"
-                                    />
-                                    <path
-                                        d="M26.8714 167.6H1.67139V105.2H94.6714V400.2H26.8714V167.6Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-1-mask)"
-                                    />
-                                </g>
-
-                                <g className="text-[#F3BEC7] opacity-100 transition-all delay-400 duration-750 dark:text-[#4B0600] starting:opacity-0 motion-safe:starting:-translate-x-[26px]">
-                                    <mask
-                                        id="path-2-mask"
-                                        maskUnits="userSpaceOnUse"
-                                        x="25.3357"
-                                        y="103"
-                                        width="338"
-                                        height="299"
-                                        fill="black"
-                                    >
-                                        <rect
-                                            fill="white"
-                                            x="25.3357"
-                                            y="103"
-                                            width="338"
-                                            height="299"
-                                        />
-                                        <path d="M260.6 400.8C229.8 400.8 204.6 392.4 185 375.6C165.8 358.8 156.2 337 156.2 310.2H226.4C226.4 318.2 229.4 324.8 235.4 330C241.4 335.2 249.4 337.8 259.4 337.8C269 337.8 276.8 335 282.8 329.4C289.2 323.8 292.4 316.6 292.4 307.8C292.4 299.8 289.6 293.2 284 288C278.4 282.8 271.2 280.2 262.4 280.2H225.2V218.4H262.4C269.2 218.4 275 216 279.8 211.2C284.6 206.4 287 200.4 287 193.2C287 184.8 284.4 178.2 279.2 173.4C274 168.6 267.4 166.2 259.4 166.2C252.2 166.2 246 168.4 240.8 172.8C236 177.2 233.6 182.8 233.6 189.6H167C167 164.8 175.8 144.6 193.4 129C211 113 233.6 105 261.2 105C288.8 105 311.2 112.2 328.4 126.6C346 141 354.8 160 354.8 183.6C354.8 200.8 350.2 214.8 341 225.6C331.8 236 320 243.2 305.6 247.2C322.8 252 336.4 260.2 346.4 271.8C356.8 283.4 362 298 362 315.6C362 340.4 352.6 360.8 333.8 376.8C315 392.8 290.6 400.8 260.6 400.8Z" />
-                                        <path d="M52.5357 167.6H27.3357V105.2H120.336V400.2H52.5357V167.6Z" />
-                                    </mask>
-                                    <path
-                                        d="M260.6 400.8C229.8 400.8 204.6 392.4 185 375.6C165.8 358.8 156.2 337 156.2 310.2H226.4C226.4 318.2 229.4 324.8 235.4 330C241.4 335.2 249.4 337.8 259.4 337.8C269 337.8 276.8 335 282.8 329.4C289.2 323.8 292.4 316.6 292.4 307.8C292.4 299.8 289.6 293.2 284 288C278.4 282.8 271.2 280.2 262.4 280.2H225.2V218.4H262.4C269.2 218.4 275 216 279.8 211.2C284.6 206.4 287 200.4 287 193.2C287 184.8 284.4 178.2 279.2 173.4C274 168.6 267.4 166.2 259.4 166.2C252.2 166.2 246 168.4 240.8 172.8C236 177.2 233.6 182.8 233.6 189.6H167C167 164.8 175.8 144.6 193.4 129C211 113 233.6 105 261.2 105C288.8 105 311.2 112.2 328.4 126.6C346 141 354.8 160 354.8 183.6C354.8 200.8 350.2 214.8 341 225.6C331.8 236 320 243.2 305.6 247.2C322.8 252 336.4 260.2 346.4 271.8C356.8 283.4 362 298 362 315.6C362 340.4 352.6 360.8 333.8 376.8C315 392.8 290.6 400.8 260.6 400.8Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M52.5357 167.6H27.3357V105.2H120.336V400.2H52.5357V167.6Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M260.6 400.8C229.8 400.8 204.6 392.4 185 375.6C165.8 358.8 156.2 337 156.2 310.2H226.4C226.4 318.2 229.4 324.8 235.4 330C241.4 335.2 249.4 337.8 259.4 337.8C269 337.8 276.8 335 282.8 329.4C289.2 323.8 292.4 316.6 292.4 307.8C292.4 299.8 289.6 293.2 284 288C278.4 282.8 271.2 280.2 262.4 280.2H225.2V218.4H262.4C269.2 218.4 275 216 279.8 211.2C284.6 206.4 287 200.4 287 193.2C287 184.8 284.4 178.2 279.2 173.4C274 168.6 267.4 166.2 259.4 166.2C252.2 166.2 246 168.4 240.8 172.8C236 177.2 233.6 182.8 233.6 189.6H167C167 164.8 175.8 144.6 193.4 129C211 113 233.6 105 261.2 105C288.8 105 311.2 112.2 328.4 126.6C346 141 354.8 160 354.8 183.6C354.8 200.8 350.2 214.8 341 225.6C331.8 236 320 243.2 305.6 247.2C322.8 252 336.4 260.2 346.4 271.8C356.8 283.4 362 298 362 315.6C362 340.4 352.6 360.8 333.8 376.8C315 392.8 290.6 400.8 260.6 400.8Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-2-mask)"
-                                    />
-                                    <path
-                                        d="M52.5357 167.6H27.3357V105.2H120.336V400.2H52.5357V167.6Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-2-mask)"
-                                    />
-                                </g>
-
-                                <g className="text-[#F8B803] opacity-100 mix-blend-color transition-all delay-400 duration-750 dark:text-[#391800] dark:mix-blend-hard-light starting:opacity-0 motion-safe:starting:-translate-x-[51px]">
-                                    <mask
-                                        id="path-3-mask"
-                                        maskUnits="userSpaceOnUse"
-                                        x="51"
-                                        y="103"
-                                        width="338"
-                                        height="299"
-                                        fill="black"
-                                    >
-                                        <rect
-                                            fill="white"
-                                            x="51"
-                                            y="103"
-                                            width="338"
-                                            height="299"
-                                        />
-                                        <path d="M286.264 400.8C255.464 400.8 230.264 392.4 210.664 375.6C191.464 358.8 181.864 337 181.864 310.2H252.064C252.064 318.2 255.064 324.8 261.064 330C267.064 335.2 275.064 337.8 285.064 337.8C294.664 337.8 302.464 335 308.464 329.4C314.864 323.8 318.064 316.6 318.064 307.8C318.064 299.8 315.264 293.2 309.664 288C304.064 282.8 296.864 280.2 288.064 280.2H250.864V218.4H288.064C294.864 218.4 300.664 216 305.464 211.2C310.264 206.4 312.664 200.4 312.664 193.2C312.664 184.8 310.064 178.2 304.864 173.4C299.664 168.6 293.064 166.2 285.064 166.2C277.864 166.2 271.664 168.4 266.464 172.8C261.664 177.2 259.264 182.8 259.264 189.6H192.664C192.664 164.8 201.464 144.6 219.064 129C236.664 113 259.264 105 286.864 105C314.464 105 336.864 112.2 354.064 126.6C371.664 141 380.464 160 380.464 183.6C380.464 200.8 375.864 214.8 366.664 225.6C357.464 236 345.664 243.2 331.264 247.2C348.464 252 362.064 260.2 372.064 271.8C382.464 283.4 387.664 298 387.664 315.6C387.664 340.4 378.264 360.8 359.464 376.8C340.664 392.8 316.264 400.8 286.264 400.8Z" />
-                                        <path d="M78.2 167.6H53V105.2H146V400.2H78.2V167.6Z" />
-                                    </mask>
-                                    <path
-                                        d="M286.264 400.8C255.464 400.8 230.264 392.4 210.664 375.6C191.464 358.8 181.864 337 181.864 310.2H252.064C252.064 318.2 255.064 324.8 261.064 330C267.064 335.2 275.064 337.8 285.064 337.8C294.664 337.8 302.464 335 308.464 329.4C314.864 323.8 318.064 316.6 318.064 307.8C318.064 299.8 315.264 293.2 309.664 288C304.064 282.8 296.864 280.2 288.064 280.2H250.864V218.4H288.064C294.864 218.4 300.664 216 305.464 211.2C310.264 206.4 312.664 200.4 312.664 193.2C312.664 184.8 310.064 178.2 304.864 173.4C299.664 168.6 293.064 166.2 285.064 166.2C277.864 166.2 271.664 168.4 266.464 172.8C261.664 177.2 259.264 182.8 259.264 189.6H192.664C192.664 164.8 201.464 144.6 219.064 129C236.664 113 259.264 105 286.864 105C314.464 105 336.864 112.2 354.064 126.6C371.664 141 380.464 160 380.464 183.6C380.464 200.8 375.864 214.8 366.664 225.6C357.464 236 345.664 243.2 331.264 247.2C348.464 252 362.064 260.2 372.064 271.8C382.464 283.4 387.664 298 387.664 315.6C387.664 340.4 378.264 360.8 359.464 376.8C340.664 392.8 316.264 400.8 286.264 400.8Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M78.2 167.6H53V105.2H146V400.2H78.2V167.6Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M286.264 400.8C255.464 400.8 230.264 392.4 210.664 375.6C191.464 358.8 181.864 337 181.864 310.2H252.064C252.064 318.2 255.064 324.8 261.064 330C267.064 335.2 275.064 337.8 285.064 337.8C294.664 337.8 302.464 335 308.464 329.4C314.864 323.8 318.064 316.6 318.064 307.8C318.064 299.8 315.264 293.2 309.664 288C304.064 282.8 296.864 280.2 288.064 280.2H250.864V218.4H288.064C294.864 218.4 300.664 216 305.464 211.2C310.264 206.4 312.664 200.4 312.664 193.2C312.664 184.8 310.064 178.2 304.864 173.4C299.664 168.6 293.064 166.2 285.064 166.2C277.864 166.2 271.664 168.4 266.464 172.8C261.664 177.2 259.264 182.8 259.264 189.6H192.664C192.664 164.8 201.464 144.6 219.064 129C236.664 113 259.264 105 286.864 105C314.464 105 336.864 112.2 354.064 126.6C371.664 141 380.464 160 380.464 183.6C380.464 200.8 375.864 214.8 366.664 225.6C357.464 236 345.664 243.2 331.264 247.2C348.464 252 362.064 260.2 372.064 271.8C382.464 283.4 387.664 298 387.664 315.6C387.664 340.4 378.264 360.8 359.464 376.8C340.664 392.8 316.264 400.8 286.264 400.8Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-3-mask)"
-                                    />
-                                    <path
-                                        d="M78.2 167.6H53V105.2H146V400.2H78.2V167.6Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-3-mask)"
-                                    />
-                                </g>
-
-                                <g className="text-[#F3BEC7] opacity-100 mix-blend-multiply transition-all delay-400 duration-750 dark:text-[#733000] dark:mix-blend-normal starting:opacity-0 motion-safe:starting:-translate-x-[78px]">
-                                    <mask
-                                        id="path-4-mask"
-                                        maskUnits="userSpaceOnUse"
-                                        x="76.6643"
-                                        y="103"
-                                        width="338"
-                                        height="299"
-                                        fill="black"
-                                    >
-                                        <rect
-                                            fill="white"
-                                            x="76.6643"
-                                            y="103"
-                                            width="338"
-                                            height="299"
-                                        />
-                                        <path d="M311.929 400.8C281.129 400.8 255.929 392.4 236.329 375.6C217.129 358.8 207.529 337 207.529 310.2H277.729C277.729 318.2 280.729 324.8 286.729 330C292.729 335.2 300.729 337.8 310.729 337.8C320.329 337.8 328.129 335 334.129 329.4C340.529 323.8 343.729 316.6 343.729 307.8C343.729 299.8 340.929 293.2 335.329 288C329.729 282.8 322.529 280.2 313.729 280.2H276.529V218.4H313.729C320.529 218.4 326.329 216 331.129 211.2C335.929 206.4 338.329 200.4 338.329 193.2C338.329 184.8 335.729 178.2 330.529 173.4C325.329 168.6 318.729 166.2 310.729 166.2C303.529 166.2 297.329 168.4 292.129 172.8C287.329 177.2 284.929 182.8 284.929 189.6H218.329C218.329 164.8 227.129 144.6 244.729 129C262.329 113 284.929 105 312.529 105C340.129 105 362.529 112.2 379.729 126.6C397.329 141 406.129 160 406.129 183.6C406.129 200.8 401.529 214.8 392.329 225.6C383.129 236 371.329 243.2 356.929 247.2C374.129 252 387.729 260.2 397.729 271.8C408.129 283.4 413.329 298 413.329 315.6C413.329 340.4 403.929 360.8 385.129 376.8C366.329 392.8 341.929 400.8 311.929 400.8Z" />
-                                        <path d="M103.864 167.6H78.6643V105.2H171.664V400.2H103.864V167.6Z" />
-                                    </mask>
-                                    <path
-                                        d="M311.929 400.8C281.129 400.8 255.929 392.4 236.329 375.6C217.129 358.8 207.529 337 207.529 310.2H277.729C277.729 318.2 280.729 324.8 286.729 330C292.729 335.2 300.729 337.8 310.729 337.8C320.329 337.8 328.129 335 334.129 329.4C340.529 323.8 343.729 316.6 343.729 307.8C343.729 299.8 340.929 293.2 335.329 288C329.729 282.8 322.529 280.2 313.729 280.2H276.529V218.4H313.729C320.529 218.4 326.329 216 331.129 211.2C335.929 206.4 338.329 200.4 338.329 193.2C338.329 184.8 335.729 178.2 330.529 173.4C325.329 168.6 318.729 166.2 310.729 166.2C303.529 166.2 297.329 168.4 292.129 172.8C287.329 177.2 284.929 182.8 284.929 189.6H218.329C218.329 164.8 227.129 144.6 244.729 129C262.329 113 284.929 105 312.529 105C340.129 105 362.529 112.2 379.729 126.6C397.329 141 406.129 160 406.129 183.6C406.129 200.8 401.529 214.8 392.329 225.6C383.129 236 371.329 243.2 356.929 247.2C374.129 252 387.729 260.2 397.729 271.8C408.129 283.4 413.329 298 413.329 315.6C413.329 340.4 403.929 360.8 385.129 376.8C366.329 392.8 341.929 400.8 311.929 400.8Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M103.864 167.6H78.6643V105.2H171.664V400.2H103.864V167.6Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M311.929 400.8C281.129 400.8 255.929 392.4 236.329 375.6C217.129 358.8 207.529 337 207.529 310.2H277.729C277.729 318.2 280.729 324.8 286.729 330C292.729 335.2 300.729 337.8 310.729 337.8C320.329 337.8 328.129 335 334.129 329.4C340.529 323.8 343.729 316.6 343.729 307.8C343.729 299.8 340.929 293.2 335.329 288C329.729 282.8 322.529 280.2 313.729 280.2H276.529V218.4H313.729C320.529 218.4 326.329 216 331.129 211.2C335.929 206.4 338.329 200.4 338.329 193.2C338.329 184.8 335.729 178.2 330.529 173.4C325.329 168.6 318.729 166.2 310.729 166.2C303.529 166.2 297.329 168.4 292.129 172.8C287.329 177.2 284.929 182.8 284.929 189.6H218.329C218.329 164.8 227.129 144.6 244.729 129C262.329 113 284.929 105 312.529 105C340.129 105 362.529 112.2 379.729 126.6C397.329 141 406.129 160 406.129 183.6C406.129 200.8 401.529 214.8 392.329 225.6C383.129 236 371.329 243.2 356.929 247.2C374.129 252 387.729 260.2 397.729 271.8C408.129 283.4 413.329 298 413.329 315.6C413.329 340.4 403.929 360.8 385.129 376.8C366.329 392.8 341.929 400.8 311.929 400.8Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-4-mask)"
-                                    />
-                                    <path
-                                        d="M103.864 167.6H78.6643V105.2H171.664V400.2H103.864V167.6Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-4-mask)"
-                                    />
-                                </g>
-
-                                <g className="text-[#F3BEC7] opacity-100 mix-blend-hard-light transition-all delay-400 duration-750 dark:text-[#4B0600] starting:opacity-0 motion-safe:starting:-translate-x-[102px]">
-                                    <mask
-                                        id="path-5-mask"
-                                        maskUnits="userSpaceOnUse"
-                                        x="102.329"
-                                        y="103"
-                                        width="338"
-                                        height="299"
-                                        fill="black"
-                                    >
-                                        <rect
-                                            fill="white"
-                                            x="102.329"
-                                            y="103"
-                                            width="338"
-                                            height="299"
-                                        />
-                                        <path d="M337.593 400.8C306.793 400.8 281.593 392.4 261.993 375.6C242.793 358.8 233.193 337 233.193 310.2H303.393C303.393 318.2 306.393 324.8 312.393 330C318.393 335.2 326.393 337.8 336.393 337.8C345.993 337.8 353.793 335 359.793 329.4C366.193 323.8 369.393 316.6 369.393 307.8C369.393 299.8 366.593 293.2 360.993 288C355.393 282.8 348.193 280.2 339.393 280.2H302.193V218.4H339.393C346.193 218.4 351.993 216 356.793 211.2C361.593 206.4 363.993 200.4 363.993 193.2C363.993 184.8 361.393 178.2 356.193 173.4C350.993 168.6 344.393 166.2 336.393 166.2C329.193 166.2 322.993 168.4 317.793 172.8C312.993 177.2 310.593 182.8 310.593 189.6H243.993C243.993 164.8 252.793 144.6 270.393 129C287.993 113 310.593 105 338.193 105C365.793 105 388.193 112.2 405.393 126.6C422.993 141 431.793 160 431.793 183.6C431.793 200.8 427.193 214.8 417.993 225.6C408.793 236 396.993 243.2 382.593 247.2C399.793 252 413.393 260.2 423.393 271.8C433.793 283.4 438.993 298 438.993 315.6C438.993 340.4 429.593 360.8 410.793 376.8C391.993 392.8 367.593 400.8 337.593 400.8Z" />
-                                        <path d="M129.529 167.6H104.329V105.2H197.329V400.2H129.529V167.6Z" />
-                                    </mask>
-                                    <path
-                                        d="M337.593 400.8C306.793 400.8 281.593 392.4 261.993 375.6C242.793 358.8 233.193 337 233.193 310.2H303.393C303.393 318.2 306.393 324.8 312.393 330C318.393 335.2 326.393 337.8 336.393 337.8C345.993 337.8 353.793 335 359.793 329.4C366.193 323.8 369.393 316.6 369.393 307.8C369.393 299.8 366.593 293.2 360.993 288C355.393 282.8 348.193 280.2 339.393 280.2H302.193V218.4H339.393C346.193 218.4 351.993 216 356.793 211.2C361.593 206.4 363.993 200.4 363.993 193.2C363.993 184.8 361.393 178.2 356.193 173.4C350.993 168.6 344.393 166.2 336.393 166.2C329.193 166.2 322.993 168.4 317.793 172.8C312.993 177.2 310.593 182.8 310.593 189.6H243.993C243.993 164.8 252.793 144.6 270.393 129C287.993 113 310.593 105 338.193 105C365.793 105 388.193 112.2 405.393 126.6C422.993 141 431.793 160 431.793 183.6C431.793 200.8 427.193 214.8 417.993 225.6C408.793 236 396.993 243.2 382.593 247.2C399.793 252 413.393 260.2 423.393 271.8C433.793 283.4 438.993 298 438.993 315.6C438.993 340.4 429.593 360.8 410.793 376.8C391.993 392.8 367.593 400.8 337.593 400.8Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M129.529 167.6H104.329V105.2H197.329V400.2H129.529V167.6Z"
-                                        fill="currentColor"
-                                    />
-                                    <path
-                                        d="M337.593 400.8C306.793 400.8 281.593 392.4 261.993 375.6C242.793 358.8 233.193 337 233.193 310.2H303.393C303.393 318.2 306.393 324.8 312.393 330C318.393 335.2 326.393 337.8 336.393 337.8C345.993 337.8 353.793 335 359.793 329.4C366.193 323.8 369.393 316.6 369.393 307.8C369.393 299.8 366.593 293.2 360.993 288C355.393 282.8 348.193 280.2 339.393 280.2H302.193V218.4H339.393C346.193 218.4 351.993 216 356.793 211.2C361.593 206.4 363.993 200.4 363.993 193.2C363.993 184.8 361.393 178.2 356.193 173.4C350.993 168.6 344.393 166.2 336.393 166.2C329.193 166.2 322.993 168.4 317.793 172.8C312.993 177.2 310.593 182.8 310.593 189.6H243.993C243.993 164.8 252.793 144.6 270.393 129C287.993 113 310.593 105 338.193 105C365.793 105 388.193 112.2 405.393 126.6C422.993 141 431.793 160 431.793 183.6C431.793 200.8 427.193 214.8 417.993 225.6C408.793 236 396.993 243.2 382.593 247.2C399.793 252 413.393 260.2 423.393 271.8C433.793 283.4 438.993 298 438.993 315.6C438.993 340.4 429.593 360.8 410.793 376.8C391.993 392.8 367.593 400.8 337.593 400.8Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-5-mask)"
-                                    />
-                                    <path
-                                        d="M129.529 167.6H104.329V105.2H197.329V400.2H129.529V167.6Z"
-                                        stroke="var(--stroke-color)"
-                                        strokeWidth="2.4"
-                                        mask="url(#path-5-mask)"
-                                    />
-                                </g>
-                            </svg>
-                            <div className="absolute inset-0 rounded-t-lg shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] lg:rounded-t-none lg:rounded-r-lg dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d]"></div>
+                                View docs
+                            </a>
                         </div>
-                    </main>
+                    </div>
                 </div>
-                <div className="hidden h-14.5 lg:block"></div>
+
+                <footer className="flex items-center justify-between border-t border-[oklch(0.87_0.008_80)] px-12 py-8 max-md:flex-col max-md:gap-4 max-md:px-5 max-md:text-center">
+                    <div className="flex items-center gap-2 font-['JetBrains_Mono'] text-lg font-bold tracking-[-0.5px]">
+                        snip
+                        <span className="text-[oklch(0.45_0.18_155)]">.</span>
+                    </div>
+                    <div className="flex gap-6">
+                        <a
+                            className="text-[13px] text-[oklch(0.52_0.01_255)] transition-colors hover:text-[oklch(0.18_0.01_255)]"
+                            href="#"
+                        >
+                            Privacy
+                        </a>
+                        <a
+                            className="text-[13px] text-[oklch(0.52_0.01_255)] transition-colors hover:text-[oklch(0.18_0.01_255)]"
+                            href="#"
+                        >
+                            Terms
+                        </a>
+                        <a
+                            className="text-[13px] text-[oklch(0.52_0.01_255)] transition-colors hover:text-[oklch(0.18_0.01_255)]"
+                            href="#"
+                        >
+                            Status
+                        </a>
+                        <a
+                            className="text-[13px] text-[oklch(0.52_0.01_255)] transition-colors hover:text-[oklch(0.18_0.01_255)]"
+                            href="#"
+                        >
+                            API
+                        </a>
+                    </div>
+                    <span className="font-['JetBrains_Mono'] text-[13px] text-[oklch(0.52_0.01_255)]">
+                        © 2026 snip.io
+                    </span>
+                </footer>
             </div>
+
+            <style>{`@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }`}</style>
         </>
     );
 }
