@@ -18,6 +18,7 @@ class ShortUrl extends Model
     {
         return [
             'expires_at' => 'datetime',
+            'click_count' => 'integer',
         ];
     }
 

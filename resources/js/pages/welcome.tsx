@@ -1,6 +1,8 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, RefObject } from 'react';
+import { login, register } from '@/routes';
+import { index } from '@/routes/urls';
 
 function makeShortCode(): string {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -131,7 +133,7 @@ function HeroShortener() {
         });
 
         setResult({
-            short: `snip.io/${makeShortCode()}`,
+            short: `${window.location.host}/${makeShortCode()}`,
             original: url,
             created: 'just now',
             clicks: 0,
@@ -529,7 +531,10 @@ function FeaturesSection() {
     );
 }
 
-export default function Welcome() {
+export default function Welcome({ canRegister }: { canRegister: boolean }) {
+    const { auth } = usePage().props as { auth: { user: unknown } };
+    const authHref = auth.user ? index() : canRegister ? register() : login();
+
     return (
         <>
             <Head title="snip - URL Shortener">
@@ -580,12 +585,12 @@ export default function Welcome() {
                             </a>
                         </li> */}
                     </ul>
-                    <a
+                    <Link
                         className="rounded-lg bg-[oklch(0.18_0.01_255)] px-[22px] py-2.5 text-sm font-semibold text-[oklch(0.98_0.004_80)] transition-[opacity,transform] hover:-translate-y-px hover:opacity-90"
-                        href="#"
+                        href={authHref}
                     >
-                        Get started free
-                    </a>
+                        {auth.user ? 'Dashboard' : 'Get started free'}
+                    </Link>
                 </nav>
 
                 <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 pt-[120px] pb-20 text-center">
@@ -658,12 +663,12 @@ export default function Welcome() {
                             required.
                         </p>
                         <div className="relative flex justify-center gap-3">
-                            <a
+                            <Link
                                 className="rounded-[10px] bg-[oklch(0.18_0.01_255)] px-9 py-4 text-[15px] font-bold text-[oklch(0.98_0.004_80)] transition-[opacity,transform] hover:-translate-y-px hover:opacity-90"
-                                href="#"
+                                href={authHref}
                             >
                                 Create free account
-                            </a>
+                            </Link>
                             <a
                                 className="rounded-[10px] border border-[oklch(0.87_0.008_80)] px-9 py-4 text-[15px] font-semibold transition-[border-color,transform] hover:-translate-y-px hover:border-[oklch(0.52_0.01_255)]"
                                 href="#"

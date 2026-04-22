@@ -1,32 +1,41 @@
-# Laravel React Starter Kit
+# URL Shortener
 
-A Laravel + Inertia.js + React application.
+A simple URL shortener built with Laravel 13, Inertia.js v3, React 19, and Tailwind CSS v4.
 
-## Requirements
+Create short links, track click counts, and manage your URLs from a dashboard.
 
-- PHP 8.4+
-- Composer
-- Node.js & npm
+## Stack
 
-## Setup
+- **Laravel 13** — backend framework (routing, auth, database)
+- **Inertia.js v3** — connects Laravel controllers to React pages without a separate API
+- **React 19** — frontend UI
+- **Tailwind CSS v4** — utility-first styling
+- **SQLite** — file-based database (no server needed)
+
+## Getting Started
 
 ```bash
+# Install dependencies and run migrations
 composer run setup
-```
 
-This installs dependencies, generates the app key, runs migrations, and builds frontend assets.
-
-## Development
-
-```bash
+# Start all dev servers (Laravel + Vite)
 composer run dev
 ```
 
-This starts all services concurrently:
+Open [http://localhost:8000](http://localhost:8000) in your browser.
 
-| Service | Description |
-|---------|-------------|
-| `php artisan serve` | Laravel server at http://localhost:8000 |
-| `npm run dev` | Vite frontend bundler with HMR |
-| `php artisan queue:listen` | Queue worker |
-| `php artisan pail` | Log viewer |
+## Useful Commands
+
+```bash
+# Run tests
+php artisan test --compact
+
+# List all routes
+php artisan route:list --except-vendor
+
+# Regenerate Wayfinder TypeScript types (after adding routes/controllers)
+php artisan wayfinder:generate
+
+# Format PHP files
+vendor/bin/pint --dirty
+```
